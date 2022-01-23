@@ -1,70 +1,34 @@
 const User = require('../models/User');
 const jwt = require('jsonwebtoken');
+const verifyToken = require('../controllers/auth');
 const router = require('express').Router();
+const {check} = require('express-validator');
+const signup = require('../controllers/signup');
+const signin = require('../controllers/signin');
+const validarCampos = require('../middleware/errores');
 
-router.post('/signup', async(req,res,next )=>{
-    const {username, email, password} = req.body;
-    console.log(username,email,password);
+router.post('/signup', [
+    check('email', 'El email es obligatorio').isEmail(),
+    check('username', 'El username es obligatorio').not().isEmpty(),
+    check('password', 'La contrasena es obligatoria').not().isEmpty(),
+    check('password', 'La contrasena debe tener minimo 6 caracteres').isLength({min: 6}),
+    validarCampos
+    ],signup);
 
+router.post('/signin',[
+    check('email', 'El email es obligatorio').notEmpty(),
+    check('email', 'No es un email valido').isEmail(),
+    check('password', 'La contraseña es obligatoria'),
+    validarCampos
+],signin);
 
-    const user = new User({
-        username: username,
-        email: email,
-        password: password
-    })
-
-    user.password = await user.encriptacion(user.password);
-    await user.save();
+router.get('/me', verifyToken ,async(req,res,next )=>{
     
-    const token = jwt.sign({id: user._id}, process.env.SECRET_KEY, {
-        expiresIn: 60*60*24*180
-    })
-
-
-    res.json({auth: true, token});
-})
-
-router.post('/signin', async(req,res,next )=>{
-    const {email, password} = req.body;
-    const user = await User.findOne({email: email});
-
-    if(!user){
-        return res.status(404).json({
-            msg: 'Usuario no registrado'
-        })
-    }
-    
-    const validacion = await user.validacion(password);
-
-    if(!validacion){
-        return res.status(401).json({
-            msg: `Usuario o contraseña incorrecta`,
-            auth: false,
-            token: null,
-        })
-    }
-
-    const token = jwt.sign({id: user._id}, process.env.SECRET_KEY,{expiresIn: 60*60*24*180});
-
-    res.json({auth:true, token: token});
-
-
-})
-
-router.get('/me', async(req,res,next )=>{
-    const token = req.headers['x-access-token']
-
-    if(!token){
-        return res.status(401).json({
-            auth: false,
-            msg: `No token provided`
-        })
-    }
 
     const decoded = jwt.verify(token,process.env.SECRET_KEY);
     console.log(decoded);
     
-    const user = await User.findById(decoded.id);
+    const user = await User.findById(req.userId);
 
     if(!user){
         return res.status(404).json({
